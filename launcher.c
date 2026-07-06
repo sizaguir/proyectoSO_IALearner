@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L // Habilitar soporte para sigaction
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -40,9 +41,14 @@ void eliminar_ventana_por_pid(pid_t pid) {
     free(actual); // Liberar memoria del nodo
 }
 
+/* 
+ * Esta función ahora se utilizará asincrónicamente como un manejador de señales
+ * en lugar de ser parte del bucle bloqueante del menú.
+ */
 void limpiar_ventanas_cerradas() {
     int status;
     pid_t pid;
+    // Bucle para atrapar múltiples muertes simultáneas sin bloquear el programa
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         eliminar_ventana_por_pid(pid);
     }
@@ -116,12 +122,23 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     puerto_servidor = argv[1];
+
+    // Interceptar la señal de muerte de hijos (SIGCHLD)
+    struct sigaction sa;
+    sa.sa_handler = limpiar_ventanas_cerradas;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP; // SA_RESTART para reiniciar scanf() tras atrapar al zombie
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        perror("Error registrando SIGCHLD");
+        exit(1);
+    }
     
     int opcion = 0;
     printf("=== Agentic OS Launcher Iniciado (Apuntando a puerto %s) ===\n", puerto_servidor);
 
     while (1) {
-        limpiar_ventanas_cerradas(); 
+        // Se elimina la llamada manual a limpiar_ventanas_cerradas() del bucle.
+        // Ahora el Kernel la invoca automáticamente.
 
         printf("\n=== MENU PRINCIPAL ===\n");
         printf("1. Abrir N numero de ventanas\n");
