@@ -6,7 +6,6 @@
 #include <signal.h>
 #include <string.h>
 
-// Nodo para Lista Enlazada Dinámica
 typedef struct NodoVentana {
     int id;
     pid_t pid;
@@ -17,7 +16,7 @@ NodoVentana *cabeza = NULL; // Inicio de la lista
 int contador_ids = 1;
 char *puerto_servidor = NULL;
 
-// --- FUNCIONES DE LISTA ENLAZADA ---
+//  FUNCIONES DE LISTA ENLAZADA 
 void insertar_ventana(int id, pid_t pid) {
     NodoVentana *nuevo = malloc(sizeof(NodoVentana));
     nuevo->id = id;
@@ -34,35 +33,29 @@ void eliminar_ventana_por_pid(pid_t pid) {
         anterior = actual;
         actual = actual->siguiente;
     }
-    if (actual == NULL) return; // No se encontró
-    if (anterior == NULL) cabeza = actual->siguiente; // Era la cabeza
+    if (actual == NULL) return; 
+    if (anterior == NULL) cabeza = actual->siguiente; 
     else anterior->siguiente = actual->siguiente;
     
-    free(actual); // Liberar memoria del nodo
+    free(actual);
 }
 
-/* 
- * Esta función ahora se utilizará asincrónicamente como un manejador de señales
- * en lugar de ser parte del bucle bloqueante del menú.
- */
 void limpiar_ventanas_cerradas() {
     int status;
     pid_t pid;
-    // Bucle para atrapar múltiples muertes simultáneas sin bloquear el programa
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
         eliminar_ventana_por_pid(pid);
     }
 }
 
-// --- LOGICA DEL LAUNCHER ---
+// LAUNCHER 
 void abrir_ventanas(int n) {
     int creadas = 0;
     for (int i = 0; i < n; i++) {
         pid_t pid = fork();
         if (pid < 0) {
             perror("[Launcher] Error en fork");
-        } else if (pid == 0) {
-            // El hijo ejecuta el cliente pasándole el puerto
+        } else if (pid == 0) {            
             char *args[] = {"./bin/window_client", puerto_servidor, NULL};
             execvp(args[0], args);
             perror("Error. ¿Compilaste window_client?");
@@ -108,10 +101,10 @@ void cerrar_todas_las_ventanas() {
         kill(actual->pid, SIGTERM);
         NodoVentana *a_borrar = actual;
         actual = actual->siguiente;
-        free(a_borrar); // Limpiar memoria de la lista
+        free(a_borrar); 
         cerradas++;
     }
-    cabeza = NULL; // Lista vacía
+    cabeza = NULL; 
     if (cerradas > 0) printf("\n[-] Se cerraron %d ventanas.\n", cerradas);
 }
 
@@ -123,11 +116,10 @@ int main(int argc, char *argv[]) {
     }
     puerto_servidor = argv[1];
 
-    // Interceptar la señal de muerte de hijos (SIGCHLD)
     struct sigaction sa;
     sa.sa_handler = limpiar_ventanas_cerradas;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP; // SA_RESTART para reiniciar scanf() tras atrapar al zombie
+    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP; 
     if (sigaction(SIGCHLD, &sa, NULL) == -1) {
         perror("Error registrando SIGCHLD");
         exit(1);
@@ -137,9 +129,6 @@ int main(int argc, char *argv[]) {
     printf("=== Agentic OS Launcher Iniciado (Apuntando a puerto %s) ===\n", puerto_servidor);
 
     while (1) {
-        // Se elimina la llamada manual a limpiar_ventanas_cerradas() del bucle.
-        // Ahora el Kernel la invoca automáticamente.
-
         printf("\n=== MENU PRINCIPAL ===\n");
         printf("1. Abrir N numero de ventanas\n");
         printf("2. Cerrar ventana con ID\n");
