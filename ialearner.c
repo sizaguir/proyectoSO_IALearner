@@ -7,7 +7,6 @@
 #include <ctype.h>
 #include <signal.h>
 
-// --- 1. ESTRUCTURAS DINÁMICAS (HASHMAP) ---
 typedef struct HashNode
 {
     char *palabra;
@@ -15,8 +14,8 @@ typedef struct HashNode
     struct HashNode *siguiente;
 } HashNode;
 
-HashNode **tabla_hash = NULL; // Puntero doble para arreglo dinámico
-int hash_size = 10007;        // Variable dinámica para el tamaño (ya no es un #define)
+HashNode **tabla_hash = NULL; 
+int hash_size = 10007;       
 
 int docs_email = 0;
 int docs_science = 0;
@@ -31,14 +30,14 @@ unsigned long hash_string(const char *str)
     int c;
     while ((c = *str++))
         hash = ((hash << 5) + hash) + c;
-    return hash % hash_size; // Usamos la variable dinámica
+    return hash % hash_size; 
 }
 
 void insertar_palabra(const char *palabra, int categoria)
 {
     unsigned long indice = hash_string(palabra);
     HashNode *nuevo = malloc(sizeof(HashNode));
-    nuevo->palabra = strdup(palabra); // strdup internamente hace un malloc para el string
+    nuevo->palabra = strdup(palabra); 
     nuevo->categoria = categoria;
     nuevo->siguiente = tabla_hash[indice];
     tabla_hash[indice] = nuevo;
@@ -54,12 +53,12 @@ int buscar_categoria(const char *palabra)
             return actual->categoria;
         actual = actual->siguiente;
     }
-    return 0; // No encontrada
+    return 0; 
 }
 
 void cargar_diccionario()
 {
-    tabla_hash = calloc(hash_size, sizeof(HashNode *)); // Inicializar dinámicamente
+    tabla_hash = calloc(hash_size, sizeof(HashNode *)); 
     FILE *file = fopen("diccionario.txt", "r");
     if (!file)
     {
@@ -71,7 +70,7 @@ void cargar_diccionario()
     size_t len = 0;
     while (getline(&linea, &len, file) != -1)
     {
-        linea[strcspn(linea, "\r\n")] = 0; // Limpiar saltos
+        linea[strcspn(linea, "\r\n")] = 0; 
         char *cat_str = strtok(linea, ",");
         char *palabra = strtok(NULL, ",");
 
@@ -88,11 +87,10 @@ void cargar_diccionario()
                 insertar_palabra(palabra, cat_id);
         }
     }
-    free(linea); // Libera el buffer dinámico de getline
+    free(linea); 
     fclose(file);
 }
 
-// NUEVO: Función para liberar toda la memoria del diccionario al salir
 void liberar_diccionario()
 {
     if (tabla_hash == NULL) return;
@@ -104,25 +102,22 @@ void liberar_diccionario()
         {
             HashNode *temp = actual;
             actual = actual->siguiente;
-            free(temp->palabra); // Liberamos el string (strdup)
-            free(temp);          // Liberamos el nodo
+            free(temp->palabra); 
+            free(temp);         
         }
     }
-    free(tabla_hash); // Liberamos el arreglo principal
+    free(tabla_hash);
     tabla_hash = NULL;
 }
 
-// --- 2. LOG Y CLASIFICACIÓN ---
+// LOG Y CLASIFICACIÓN 
 void handle_sigint(int sig) {
     (void)sig;
-    // Obtenemos el PID del propio servidor IALearner
     pid_t server_pid = getpid(); 
-    
-    // 1. Imprimimos el encabezado en la consola inmediatamente
+
     printf("\n\n=== RESUMEN FINAL (Servidor PID: %d) ===\n", server_pid);
     printf("Documentos -> Correos: %d | Articulos: %d | Reportes: %d\n", docs_email, docs_science, docs_report);
-    
-    // 2. Abrimos el archivo para también dejarlo guardado en el log
+
     FILE *file = fopen("debug_learner.txt", "a");
     if (file) {
         fprintf(file, "\n=== RESUMEN FINAL (Servidor PID: %d) ===\n", server_pid);
@@ -161,20 +156,17 @@ void handle_sigint(int sig) {
         }
         // No clasificado
         else {
-            printf(">> TIPO DE USUARIO: No clasificado (Patron de uso mixto/indeterminado)\n");
+            printf(">> TIPO DE USUARIO: No clasificado (Patron de uso indeterminado)\n");
             printf(">> Porcentajes - Correos: %.1f%%, Articulos: %.1f%%, Reportes: %.1f%%\n", p_email * 100, p_science * 100, p_report * 100);
             if (file) {
-                fprintf(file, ">> TIPO DE USUARIO: No clasificado (Patron de uso mixto/indeterminado)\n");
+                fprintf(file, ">> TIPO DE USUARIO: No clasificado (Patron de uso indeterminado)\n");
                 fprintf(file, ">> Porcentajes - Correos: %.1f%%, Articulos: %.1f%%, Reportes: %.1f%%\n", p_email * 100, p_science * 100, p_report * 100);
             }
         }
     }
     
-    if (file) fclose(file);
-    
-    // NUEVO: Destruir el diccionario dinámico antes de cerrar el programa
-    liberar_diccionario();
-    
+    if (file) fclose(file);    
+    liberar_diccionario();    
     close(server_fd);
     printf("\nMemoria liberada y servidor cerrado limpiamente.\n");
     exit(0);
@@ -209,7 +201,7 @@ void procesar_oracion(char *sentence, int *count_email, int *count_science, int 
     }
 }
 
-// --- 3. HILO CLIENTE ---
+// HILO CLIENTE
 void *handle_client(void *socket_desc)
 {
     int sock = *(int *)socket_desc;
@@ -296,8 +288,7 @@ void *handle_client(void *socket_desc)
         pthread_mutex_unlock(&lock);
         procesar_oracion(sentence, &count_email, &count_science, &count_report);
     }
-
-    // Lógica de Desempate (Opción 3 - Estricta)
+    
     int is_email = 0, is_science = 0, is_report = 0;
     if (count_email >= 3)
         is_email = 1;
@@ -361,8 +352,6 @@ void *handle_client(void *socket_desc)
         fclose(f);
     }
     pthread_mutex_unlock(&lock);
-
-    // Liberar memoria dinámica
     free(buffer);
     free(sentence);
     close(sock);
@@ -392,14 +381,13 @@ int main()
 
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
-    address.sin_port = htons(0); // PUERTO DINÁMICO ASIGNADO POR EL OS
+    address.sin_port = htons(0); 
 
     if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
         exit(EXIT_FAILURE);
     if (listen(server_fd, 10) < 0)
         exit(EXIT_FAILURE);
 
-    // Extraer y mostrar el puerto asignado
     if (getsockname(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen) == -1)
         exit(EXIT_FAILURE);
     printf("Servidor activo. Escuchando en el puerto: %d\n", ntohs(address.sin_port));
