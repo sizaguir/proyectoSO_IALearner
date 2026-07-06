@@ -70,7 +70,7 @@ Ejemplo:
 
 Una vez iniciado el **Launcher**, se mostrará un menú interactivo con las siguientes opciones:
 
-## 🖥️ Uso del Menú Principal (Launcher)
+## Uso del Menú Principal (Launcher)
 
 Una vez iniciado el Launcher, verás un menú interactivo con las siguientes opciones:
 
@@ -80,7 +80,7 @@ Una vez iniciado el Launcher, verás un menú interactivo con las siguientes opc
 4.  **Ver ventanas abiertas con su ID:** Muestra una tabla que relaciona el ID interno asignado por el launcher con el PID real de la ventana en Linux.
 5.  **Salir del sistema:** Cierra todas las ventanas de forma segura y termina el proceso del launcher.
 
-# 📊 Resultados y Auditoría
+# Resultados y Auditoría
 
 Cada vez que una ventana finaliza una oración (presionando **Enter**), el servidor realiza automáticamente las siguientes acciones:
 
