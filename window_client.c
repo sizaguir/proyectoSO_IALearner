@@ -9,17 +9,14 @@
 
 int main(int argc, char *argv[])
 {
-    // --- ESCUDO ANTI-CRASH (Modo silencioso) ---
     signal(SIGPIPE, SIG_IGN); 
 
-    // 1. Validar que el launcher nos haya pasado el puerto
     if (argc != 2)
     {
         printf("\nError: Se requiere el puerto del servidor como argumento.\n");
         return 1;
     }
 
-    // INICIO DEL CÓDIGO DE SOCKETS (CLIENTE)
     int sock = 0;
     struct sockaddr_in serv_addr;
 
@@ -29,13 +26,11 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    // 2. Extraer el puerto de los argumentos (dinámico)
     int port = atoi(argv[1]);
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port); 
 
-    // Convertir direcciones IPv4 e IPv6 de texto a binario (localhost)
     if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0)
     {
         printf("\nDirección inválida/ No soportada \n");
@@ -48,11 +43,9 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    // --- RECUPERAMOS EL PID Y SE LO ENVIAMOS AL SERVIDOR ---
     pid_t mi_pid = getpid();
     printf("Conectado exitosamente al IALearner en el puerto %d (Ventana PID %d).\n", port, mi_pid);
     send(sock, &mi_pid, sizeof(pid_t), 0);
-    // -------------------------------------------------------
 
     // CÓDIGO X11
     Display *display = XOpenDisplay(NULL);
@@ -84,7 +77,7 @@ int main(int argc, char *argv[])
             if (name)
             {
                 printf("Ventana PID %d\nKey pressed: %s\n", mi_pid, name);
-                send(sock, name, strlen(name), 0); // Falla en silencio si no hay servidor
+                send(sock, name, strlen(name), 0); 
             }
             else
             {
