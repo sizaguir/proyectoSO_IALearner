@@ -9,6 +9,9 @@
 
 int main(int argc, char *argv[])
 {
+    // --- ESCUDO ANTI-CRASH (Modo silencioso) ---
+    signal(SIGPIPE, SIG_IGN); 
+
     // 1. Validar que el launcher nos haya pasado el puerto
     if (argc != 2)
     {
@@ -30,7 +33,7 @@ int main(int argc, char *argv[])
     int port = atoi(argv[1]);
 
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port); // <-- Aquí usamos la variable 'port'
+    serv_addr.sin_port = htons(port); 
 
     // Convertir direcciones IPv4 e IPv6 de texto a binario (localhost)
     if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0)
@@ -44,7 +47,12 @@ int main(int argc, char *argv[])
         printf("\nConexión fallida al IALearner. ¿Está corriendo el servidor en el puerto %d?\n", port);
         return -1;
     }
-    printf("Conectado exitosamente al IALearner en el puerto %d.\n", port);
+
+    // --- RECUPERAMOS EL PID Y SE LO ENVIAMOS AL SERVIDOR ---
+    pid_t mi_pid = getpid();
+    printf("Conectado exitosamente al IALearner en el puerto %d (Ventana PID %d).\n", port, mi_pid);
+    send(sock, &mi_pid, sizeof(pid_t), 0);
+    // -------------------------------------------------------
 
     // CÓDIGO X11
     Display *display = XOpenDisplay(NULL);
@@ -75,12 +83,8 @@ int main(int argc, char *argv[])
 
             if (name)
             {
-                printf("Key pressed: %s\n", name);
-                if (send(sock, name, strlen(name), 0) < 0)
-                {
-                    printf("\n[!] Error: El servidor IALearner se ha cerrado o te ha desconectado por inactividad.\n");
-                    break; // Sale del while y cierra la ventana X11 limpiamente
-                }
+                printf("Ventana PID %d\nKey pressed: %s\n", mi_pid, name);
+                send(sock, name, strlen(name), 0); // Falla en silencio si no hay servidor
             }
             else
             {

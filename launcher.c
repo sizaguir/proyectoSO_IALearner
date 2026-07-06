@@ -82,17 +82,17 @@ void ver_ventanas() {
     printf("-------------------------\n");
 }
 
-void cerrar_ventana_id(int id_buscar) {
+void cerrar_ventana_id(int valor_ingresado) {
     NodoVentana *actual = cabeza;
     while (actual != NULL) {
-        if (actual->id == id_buscar) {
+        if (actual->id == valor_ingresado || actual->pid == valor_ingresado) {
             kill(actual->pid, SIGTERM);
-            printf("\n[-] Ventana con ID %d cerrada.\n", id_buscar);
+            printf("\n[-] Ventana con ID %d cerrada.\n", valor_ingresado);
             return;
         }
         actual = actual->siguiente;
     }
-    printf("\n[!] No se encontro ventana activa con ID %d.\n", id_buscar);
+    printf("\n[!] No se encontro ventana activa con ID %d.\n", valor_ingresado);
 }
 
 void cerrar_todas_las_ventanas() {

@@ -6,9 +6,6 @@
 #include <pthread.h>
 #include <ctype.h>
 #include <signal.h>
-#include <sys/time.h>
-
-#define HASH_SIZE 10007 // Tamaño primo para mejor dispersión
 
 // --- 1. ESTRUCTURAS DINÁMICAS (HASHMAP) ---
 typedef struct HashNode
@@ -19,6 +16,7 @@ typedef struct HashNode
 } HashNode;
 
 HashNode **tabla_hash = NULL; // Puntero doble para arreglo dinámico
+int hash_size = 10007;        // Variable dinámica para el tamaño (ya no es un #define)
 
 int docs_email = 0;
 int docs_science = 0;
@@ -33,14 +31,14 @@ unsigned long hash_string(const char *str)
     int c;
     while ((c = *str++))
         hash = ((hash << 5) + hash) + c;
-    return hash % HASH_SIZE;
+    return hash % hash_size; // Usamos la variable dinámica
 }
 
 void insertar_palabra(const char *palabra, int categoria)
 {
     unsigned long indice = hash_string(palabra);
     HashNode *nuevo = malloc(sizeof(HashNode));
-    nuevo->palabra = strdup(palabra);
+    nuevo->palabra = strdup(palabra); // strdup internamente hace un malloc para el string
     nuevo->categoria = categoria;
     nuevo->siguiente = tabla_hash[indice];
     tabla_hash[indice] = nuevo;
@@ -61,7 +59,7 @@ int buscar_categoria(const char *palabra)
 
 void cargar_diccionario()
 {
-    tabla_hash = calloc(HASH_SIZE, sizeof(HashNode *)); // Inicializar dinámicamente
+    tabla_hash = calloc(hash_size, sizeof(HashNode *)); // Inicializar dinámicamente
     FILE *file = fopen("diccionario.txt", "r");
     if (!file)
     {
@@ -94,28 +92,91 @@ void cargar_diccionario()
     fclose(file);
 }
 
-// --- 2. LOG Y CLASIFICACIÓN ---
-void handle_sigint(int sig)
+// NUEVO: Función para liberar toda la memoria del diccionario al salir
+void liberar_diccionario()
 {
-    (void)sig;
-    FILE *file = fopen("debug_learner.txt", "a");
-    if (file)
+    if (tabla_hash == NULL) return;
+    
+    for (int i = 0; i < hash_size; i++)
     {
-        fprintf(file, "\n=== RESUMEN FINAL ===\nDocumentos -> Correos: %d | Articulos: %d | Reportes: %d\nPERFIL: ", docs_email, docs_science, docs_report);
-        if (docs_email > 0 && docs_science == 0 && docs_report == 0)
-            fprintf(file, "Personal Administrativo\n");
-        else if (docs_email > 0 && docs_report > 0 && docs_science == 0)
-            fprintf(file, "Personal Tecnico\n");
-        else if (docs_email > 0 && docs_science > 0)
-            fprintf(file, "Profesor\n");
-        else if (docs_science > 0 && docs_report > 0)
-            fprintf(file, "Estudiante\n");
-        else
-            fprintf(file, "Indefinido\n");
-        fclose(file);
+        HashNode *actual = tabla_hash[i];
+        while (actual != NULL)
+        {
+            HashNode *temp = actual;
+            actual = actual->siguiente;
+            free(temp->palabra); // Liberamos el string (strdup)
+            free(temp);          // Liberamos el nodo
+        }
     }
+    free(tabla_hash); // Liberamos el arreglo principal
+    tabla_hash = NULL;
+}
+
+// --- 2. LOG Y CLASIFICACIÓN ---
+void handle_sigint(int sig) {
+    (void)sig;
+    // Obtenemos el PID del propio servidor IALearner
+    pid_t server_pid = getpid(); 
+    
+    // 1. Imprimimos el encabezado en la consola inmediatamente
+    printf("\n\n=== RESUMEN FINAL (Servidor PID: %d) ===\n", server_pid);
+    printf("Documentos -> Correos: %d | Articulos: %d | Reportes: %d\n", docs_email, docs_science, docs_report);
+    
+    // 2. Abrimos el archivo para también dejarlo guardado en el log
+    FILE *file = fopen("debug_learner.txt", "a");
+    if (file) {
+        fprintf(file, "\n=== RESUMEN FINAL (Servidor PID: %d) ===\n", server_pid);
+        fprintf(file, "Documentos -> Correos: %d | Articulos: %d | Reportes: %d\n", docs_email, docs_science, docs_report);
+    }
+
+    int total = docs_email + docs_science + docs_report;
+    
+    if (total == 0) {
+        printf(">> TIPO DE USUARIO: Indefinido (No se escribieron documentos)\n");
+        if (file) fprintf(file, ">> TIPO DE USUARIO: Indefinido (No se escribieron documentos)\n");
+    } else {
+        float p_email = (float)docs_email / total;
+        float p_science = (float)docs_science / total;
+        float p_report = (float)docs_report / total;
+        
+        // Admin
+        if (p_email >= 0.75) {
+            printf(">> TIPO DE USUARIO: Personal Administrativo (Predominancia de correos: %.1f%%)\n", p_email * 100);
+            if (file) fprintf(file, ">> TIPO DE USUARIO: Personal Administrativo (Predominancia de correos: %.1f%%)\n", p_email * 100);
+        }
+        // Técnico
+        else if (p_report >= 0.50 && p_email >= 0.20) {
+            printf(">> TIPO DE USUARIO: Personal Tecnico (Correos: %.1f%%, Reportes: %.1f%%)\n", p_email * 100, p_report * 100);
+            if (file) fprintf(file, ">> TIPO DE USUARIO: Personal Tecnico (Correos: %.1f%%, Reportes: %.1f%%)\n", p_email * 100, p_report * 100);
+        }
+        // Profesor
+        else if (p_email >= 0.40 && p_science >= 0.25) {
+            printf(">> TIPO DE USUARIO: Profesor (Correos: %.1f%%, Articulos: %.1f%%)\n", p_email * 100, p_science * 100);
+            if (file) fprintf(file, ">> TIPO DE USUARIO: Profesor (Correos: %.1f%%, Articulos: %.1f%%)\n", p_email * 100, p_science * 100);
+        }
+        // Estudiante
+        else if (p_report >= 0.40 && p_science >= 0.25 && p_email <= 0.19) {
+            printf(">> TIPO DE USUARIO: Estudiante (Articulos: %.1f%%, Reportes: %.1f%%)\n", p_science * 100, p_report * 100);
+            if (file) fprintf(file, ">> TIPO DE USUARIO: Estudiante (Articulos: %.1f%%, Reportes: %.1f%%)\n", p_science * 100, p_report * 100);
+        }
+        // No clasificado
+        else {
+            printf(">> TIPO DE USUARIO: No clasificado (Patron de uso mixto/indeterminado)\n");
+            printf(">> Porcentajes - Correos: %.1f%%, Articulos: %.1f%%, Reportes: %.1f%%\n", p_email * 100, p_science * 100, p_report * 100);
+            if (file) {
+                fprintf(file, ">> TIPO DE USUARIO: No clasificado (Patron de uso mixto/indeterminado)\n");
+                fprintf(file, ">> Porcentajes - Correos: %.1f%%, Articulos: %.1f%%, Reportes: %.1f%%\n", p_email * 100, p_science * 100, p_report * 100);
+            }
+        }
+    }
+    
+    if (file) fclose(file);
+    
+    // NUEVO: Destruir el diccionario dinámico antes de cerrar el programa
+    liberar_diccionario();
+    
     close(server_fd);
-    printf("\nServidor cerrado. Saliendo...\n");
+    printf("\nMemoria liberada y servidor cerrado limpiamente.\n");
     exit(0);
 }
 
@@ -153,7 +214,7 @@ void *handle_client(void *socket_desc)
 {
     int sock = *(int *)socket_desc;
     free(socket_desc);
-    
+
     pid_t client_pid = 0;
     read(sock, &client_pid, sizeof(pid_t));
 
@@ -177,27 +238,7 @@ void *handle_client(void *socket_desc)
     }
     pthread_mutex_unlock(&lock);
 
-    // --- NUEVO: Configurar un Timeout de 30 segundos ---
-    struct timeval tv;
-    tv.tv_sec = 30; // Si pasan 30 segundos sin recibir teclas, se desconecta
-    tv.tv_usec = 0;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof tv);
-    // ----------------------------------------------------
-
-    while (1)
-    {
-        valread = read(sock, buffer, buffer_cap - 1);
-
-        if (valread == 0)
-        {
-            break; // La ventana se cerró limpiamente (Escape)
-        }
-        else if (valread < 0)
-        {
-            printf("\n[!] TIMEOUT: Ventana PID %d inactiva por 30s. Conexion cerrada por el servidor.\n", client_pid);
-            break; // Rompe el ciclo y evalúa el texto huérfano si es que quedó alguno
-        }
-
+    while ((valread = read(sock, buffer, buffer_cap - 1)) > 0) {
         buffer[valread] = '\0';
 
         // Ampliar memoria dinámica de la oración si es necesario
